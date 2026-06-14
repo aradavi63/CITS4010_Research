@@ -1,0 +1,669 @@
+
+
+--- PAGE 1 ---
+A Literature Review on Privacy-Preserving
+Federated Learning
+Adam Ahmadavi (23904324)
+May 2026
+Statement of AI Use:LLMs were used to assist with formatting and editing this
+document, and to help rewrite certain phrases.
+1 Introduction
+Machine learning has become increasingly important in privacy-sensitive domains
+such as healthcare, finance, and public administration, yet its dependence on large
+and representative datasets conflicts with legal, ethical, and organisational con-
+straints on data sharing. For example, several hospitals may each hold clinically
+valuable patient records, but cannot simply pool those records into a central dataset
+because of privacy regulations and institutional data governance requirements. This
+creates what Li et al. [1] describe as “data islands”: datasets that may be individu-
+ally limited, but collectively valuable if they could be used for collaborative model
+training.
+Federated Learning (FL) addresses this problem by allowing multiple clients to train
+a shared model without directly exchanging their raw data, formulated by Google
+in 2019 [1]. In a typical FL process, a central server distributes a global model to
+participating clients, each client trains the model locally on private data, and only
+model updates, such as gradients or weight changes, are returned for aggregation.
+For example, in a cross-hospital diagnosis task, each hospital could train locally on
+its own patient records while contributing to a shared global model. In this way,
+FL reduces the need for centralised data pooling while still allowing institutions to
+benefit from distributed data.
+However, FL’s privacy guarantee is conditional rather than intrinsic. Although raw
+data remains local, the model updates shared during training can still leak sensitive
+information. Gradient inversion attacks can reconstruct training inputs from gradi-
+ents [2–4], membership inference attacks can determine whether a record was used
+during training [5–8], source inference attacks can infer which client contributed
+a record [5], and poisoning attacks can manipulate the global model by injecting
+corrupted data or updates [9, 10]. These attacks show that data locality alone is
+not sufficient: FL protects the location of data, but not necessarily the information
+encoded in model updates or model behaviour.
+1
+
+
+--- PAGE 2 ---
+To mitigate these risks, researchers have proposed several privacy-preserving and
+robustness techniques. Homomorphic Encryption (HE) and secure aggregation can
+hide plaintext gradients during aggregation [11, 12], Differential Privacy (DP) can
+reduce membership leakage by adding calibrated noise [13], and robust aggregation
+or recovery mechanisms can reduce the impact of poisoning attacks [14,15]. Yet each
+defence protects only part of the attack surface. HE can protect gradients in transit,
+but does not prevent inference from the final model’s behaviour. DP can reduce
+membership leakage, but often reduces model accuracy. Robust aggregation can
+defend model integrity, but does not provide confidentiality. The central challenge is
+therefore not simply to add one privacy mechanism, but to understand how privacy,
+utility, efficiency, and robustness can be balanced.
+This review examines privacy-preserving FL through that lens. Section 2 introduces
+FL and the cryptographic background needed to understand HE. Section 3 surveys
+the main attack classes against FL and the threat models under which they oper-
+ate. Section 4 reviews defence techniques, including HE-based secure aggregation,
+DP, and poisoning defences. Section 5 examines the privacy–utility–efficiency trade-
+off and explains why configurable privacy-preserving FL systems are needed. The
+review concludes by identifying the research gap motivating this project: existing
+HE-based FL schemes provide promising gradient confidentiality, but their tradeoffs
+are often fixed, implicit, and evaluated under narrow threat models.
+2 Background
+2.1 Federated Learning
+Federated Learning is a distributed machine learning paradigm in which multiple
+clients collaboratively train a shared model while keeping their raw data local [1].
+The most common training pattern is FedAvg. In each training round, the server
+sends the current global model to a selected group of clients. Each client performs
+local training on its private dataset and returns an update to the server. The server
+then computes a weighted average of the received updates and uses it to produce
+the next global model. Figure 1 summarises this process.
+Central server
+Distributes global model and aggregates updates
+⇓global model,⇑model updates
+Client A Client B Client C
+Local data Local data Local data
+Local training Local training Local training
+Figure 1: Basic federated learning workflow. The server distributes the current
+global model to selected clients. Each client trains locally on private data and
+returns a model update rather than raw data. The server aggregates the updates to
+form the next global model.
+This process is attractive because it reduces the need to centralise sensitive data.
+2
+
+
+--- PAGE 3 ---
+For example, in a hospital consortium, each hospital can train locally on its own
+patient records while contributing to a shared diagnostic model. However, the server
+still receives information derived from the local data. The privacy properties of FL
+therefore depend on the type of data distribution, the communication architecture,
+the scale of deployment, and the privacy mechanism used.
+Li et al. [1] classify FL systems across dimensions including data distribution, model
+type, privacy mechanism, communication architecture, federation scale, and deploy-
+ment motivation. This taxonomy is important because attacks and defences do not
+apply uniformly across all FL settings. For example, cross-device FL may involve
+many unreliable mobile clients, while cross-silo FL usually involves fewer but more
+stable institutional participants. A defence suitable for one setting may be impracti-
+cal in the other. Similarly, horizontal FL, where clients share the same feature space
+but hold different samples, creates different privacy risks from vertical FL, where
+clients hold different features about overlapping users. This review focuses primarily
+on horizontal FL because most of the attack and defence literature considered here
+assumes shared model updates over similarly structured local datasets.
+2.2 Homomorphic Encryption
+Homomorphic Encryption (HE) is a cryptographic technique that allows compu-
+tation to be performed directly on encrypted data. After decryption, the result
+corresponds to the result that would have been obtained if the same operation had
+been performed on the plaintext. In FL, this is useful because a server may be
+able to aggregate encrypted client updates without seeing the individual plaintext
+gradients.
+This property makes HE a natural candidate for defending against attacks that re-
+quire direct access to gradients. However, HE also introduces computational and
+communication overhead, because encrypted values are larger and more expensive to
+process than plaintext values. In machine learning, the CKKS scheme is especially
+relevant because it supports approximate arithmetic over real numbers, which suits
+neural network training [12]. The approximate nature of CKKS also introduces secu-
+rity and correctness considerations: parameter choices such as polynomial modulus
+degree, coefficient modulus, and multiplication depth affect the balance between
+security, accuracy, and efficiency [16].
+Therefore, HE should be understood as a powerful but configurable building block.
+It can protect update confidentiality, but it does not automatically solve all FL
+security problems. The detailed application of HE to FL is discussed in Section 4
+as part of the defence landscape.
+3 Attacks Against Federated Learning
+Despite its goal of preserving data locality, FL is not inherently secure. The ex-
+change of model updates creates several attack surfaces: an adversary may observe
+gradients, query model predictions, track model behaviour across rounds, or manip-
+3
+
+
+--- PAGE 4 ---
+ulate client updates. These attacks differ not only in method, but also in threat
+model.
+3.1 Threat Models in Federated Learning
+An honest-but-curious, or passive, adversary follows the FL protocol but attempts
+to infer private information from legitimately observed data such as gradients, aggre-
+gated parameters, or model predictions. A typical example is a server that correctly
+aggregates client updates but stores them for later analysis [17].
+A colluding semi-honest adversary is stronger. In this setting, the server and some
+clients cooperate to infer information about an honest client’s data. This threat
+model is important for HE-based schemes, because secure aggregation must often
+protect clients not only from the server, but also from combinations of server-client
+collusion [11].
+A malicious adversary deviates from the protocol. Rather than only observing in-
+formation, it may submit poisoned data, manipulated gradients, or backdoored up-
+dates. This model is central to poisoning attacks. Unlike privacy attacks, poisoning
+attacks target model integrity: the adversary aims to degrade the model or force
+specific misclassifications [9].
+These threat models structure the remainder of this section. Gradient inversion and
+membership inference usually focus on confidentiality, while poisoning focuses on
+integrity. This distinction matters because a defence that hides gradients does not
+necessarily detect malicious gradients.
+3.2 Gradient Inversion Attacks
+Gradient inversion attacks (GIAs) exploit the fact that the gradients a client trans-
+mits encode information about the local training data used to produce them. An
+adversary who observes a gradient vector can attempt to recover the original input
+by solving an optimisation problem: initialise dummy inputs and labels, compute
+their gradient, and iteratively adjust the dummy inputs until the resulting gradient
+matches the observed one as closely as possible. For example, an honest-but-curious
+server receiving a client’s plaintext image-classification gradient may attempt to
+reconstruct the original image that generated that update.
+Geiping et al. [2] established the severity of this threat by demonstrating that high-
+resolution images can be faithfully reconstructed from gradients in realistic white-
+box FL settings involving trained deep networks. Their cosine-similarity-based op-
+timisation objective produces reconstructions that are visually close to the originals
+in many cases. This result directly challenges the assumption that withholding
+raw data is sufficient for privacy, because the gradient itself can act as a compact
+representation of that data.
+Geng et al. [3] broadened the attack to both FedSGD and FedAvg protocols and
+improved label inference, showing that the threat is not confined to single-step gra-
+dient descent. Guo et al. [4] provide a systematic taxonomy of GIA families such as
+4
+
+
+--- PAGE 5 ---
+optimisation-based, generation-based, and analytics-based GIA, and evaluate their
+practical viability under realistic deployment conditions, including larger batch sizes
+and partial model access. Their analysis shows that optimisation-based attacks are
+the most broadly practical, while generation-based attacks require auxiliary datasets
+and analytics-based attacks are limited to specific architectures.
+A critical contribution that affects the severity assessment comes from the eval-
+uation methodology implicit in these works: attack success depends strongly on
+assumptions about batch size, label availability, model architecture, and normal-
+isation choices. Large batches reduce the information content per sample in the
+gradient, making reconstruction harder; batch normalisation layers introduce sta-
+tistical masking that also degrades reconstruction quality. This means GIAs are
+neither universally devastating nor irrelevant: their practical impact is a function of
+the specific FL configuration, and any claim about GIA resistance or vulnerability
+must specify these conditions.
+3.3 Model Inference Attacks
+Model inference attacks extract information about the training set without recon-
+structing raw inputs, instead operating on model outputs, parameter trajectories,
+or behavioural patterns. Whereas GIAs ask whether the original data can be re-
+covered, model inference asks whether private facts about participation, source, or
+distribution can be inferred from the trained model or training history.
+3.3.1 Membership Inference Attacks
+Membership inference attacks (MIAs) ask whether a given data point was included
+in the training set. Bai et al. [5] provide a comprehensive survey of MIAs in the
+FL setting, organising attacks by adversary role (passive global, active global, mali-
+cious local), observation channel (gradients, model parameters, predictions), and the
+metric used to distinguish members from non-members. The common thread across
+attack families is the exploitation of the model’s tendency to memorise training data,
+which creates measurable statistical differences between the model’s behaviour on
+members versus non-members. For example, if a hospital model behaves unusually
+confidently on one patient’s record, an adversary may infer that the record was part
+of the training set.
+Liu et al. [6] exploit the temporal dimension of this phenomenon. Rather than
+querying a static model, they track a target sample’s confidence trajectory across
+training rounds, observing that membership status produces characteristic patterns
+in how confidence evolves. Their TEAR attack achieves higher success rates than
+single-round baselines, particularly under realistic federated configurations where
+the global model is updated incrementally. He et al. [7] further extend MIAs by
+aggregating confidence signals across multiple rounds and combining them with
+data-poisoning techniques to improve attack accuracy while maintaining a minimal
+footprint that is difficult to detect.
+Zhu et al. [8] introduce FedMIA, which targets a federated configuration where
+5
+
+
+--- PAGE 6 ---
+clients participate in multiple rounds and the adversary can observe updates over
+time. They show that round-level differences contain membership signals that persist
+even after aggregation, demonstrating that the temporal structure of FL training is
+itself an information channel that static defences do not fully address.
+The key implication for defence design is that MIAs do not necessarily require ac-
+cess to plaintext gradients: they can operate on model behaviour and parameter
+trajectories. Homomorphic encryption, which protects gradients in transit, does not
+inherently reduce membership leakage from the final model.
+3.3.2 Source Inference Attacks
+Source inference attacks (SIAs) ask a stronger question than membership inference:
+not just whether a record was in training, but which client it came from. This attack
+class is particularly relevant in cross-silo FL, where revealing the source institution
+of a training record can breach confidentiality even when the record itself is not
+reconstructed. For example, if a record can be linked to a specific specialist clinic,
+the source itself may reveal sensitive contextual information.
+Bai et al. [5] situate source-oriented attacks within the broader MIA taxonomy,
+noting that such inference exploits the heterogeneity of client datasets: because
+different clients hold different data distributions, gradient or model-behaviour pat-
+terns may carry client-identifiable information. An honest-but-curious server can
+use these patterns, together with any available auxiliary information, to infer which
+client contributed a given sample, especially when clients exhibit local overfitting.
+This attack class reveals a gap between update confidentiality and participant con-
+fidentiality. A scheme that encrypts gradients during aggregation may prevent the
+server from reading individual updates in plaintext, but the final global model and
+its behaviour on public data can still carry provenance signals. Source inference
+therefore motivates defences, such as gradient perturbation or client-level differen-
+tial privacy, that reduce the identifiability of individual clients’ contributions, not
+just the readability of individual updates.
+3.4 Poisoning Attacks
+Poisoning attacks target the integrity of the global model rather than the confiden-
+tiality of the training data. In FL, the distributed training process creates an inher-
+ent vulnerability: the server aggregates updates from participating clients without
+directly verifying the correctness of their local computations. A malicious client can
+exploit this by submitting manipulated updates that shift the global model toward
+a target objective.
+Tolpegin et al. [9] provide a foundational analysis of data poisoning in FL, showing
+that an adversary who controls even a small fraction of clients can substantially de-
+grade global model accuracy by flipping or corrupting local labels. For example, if
+malicious clients repeatedly relabel one image class as another during local training,
+the global model may learn a targeted misclassification. Their experiments demon-
+strate that the decentralised structure of FL can amplify adversarial inputs because
+6
+
+
+--- PAGE 7 ---
+poisoned updates are averaged into the global model alongside benign updates.
+Kasyap and Tripathy [10] extend the poisoning literature by proposing hyperdi-
+mensional data poisoning attacks (HDPA). Rather than simply flipping labels, their
+approach uses hyperdimensional computing to generate adversarial poisoned sam-
+ples that preserve the apparent semantics of the original data while pushing the
+model toward targeted misclassification. This makes the attack harder to detect
+than simple label-flipping, because the poisoned samples are not necessarily obvious
+outliers. Their results show that poisoning can remain effective even against some
+Byzantine-robust defences, reinforcing the point that integrity protection requires
+more than encrypted communication.
+The central lesson for defence design is that poisoning is orthogonal to confiden-
+tiality: encrypting gradients in transit does not prevent the server from faithfully
+aggregating a poisoned update, because the poisoned update is still a valid cipher-
+text whose plaintext is a malicious gradient. Protecting model integrity requires
+mechanisms that can assess the quality or trustworthiness of updates, not merely
+their secrecy.
+3.5 Synthesis of the Attack Landscape
+The attack literature shows that FL exposes information through multiple channels.
+Gradient inversion is the most direct challenge to the assumption that updates are
+safe to share, because it treats gradients as an encoded representation of the training
+input. Membership and source inference are subtler: they may remain possible even
+when gradients are hidden, because the global model can still memorise or reflect
+patterns from particular clients. Poisoning is different again, because it does not
+require learning private information at all; it exploits the server’s dependence on
+client-supplied updates.
+This comparison has two implications. First, attack severity cannot be assessed in
+the abstract. A small-batch image classification task with plaintext gradients is a
+very different setting from a cross-silo FL deployment using encrypted aggregation
+and multiple local epochs. Second, no single defence should be described as making
+FL “secure” unless the claim is limited to a specific observable and adversary. This
+is why the remainder of the review separates confidentiality mechanisms, such as
+HE and DP, from integrity mechanisms, such as robust aggregation and recovery.
+4 Defence Techniques for Federated Learning
+Given the range of attacks targeting FL, a substantial body of research has fo-
+cused on developing privacy-preserving techniques to mitigate both data leakage and
+model manipulation. The key organising principle for this section is that different
+defences address different attacks: cryptographic approaches primarily counter gra-
+dient inversion and honest-but-curious inference; statistical perturbation approaches
+counter membership leakage; and integrity-focused mechanisms counter poisoning.
+Figure??and Table 1 summarise this mapping.
+7
+
+
+--- PAGE 8 ---
+Table 1: Defence families mapped to the attacks they primarily address.
+Defence F amily Primary Attacks Ad-
+dressed
+Main Limitation
+HE / Secure Aggregation Gradient inversion; honest-
+but-curious server; collu-
+sion
+Does not prevent MIA/SIA
+from model behaviour;
+does not stop poisoning
+Differential Privacy / Noise Membership inference; gra-
+dient leakage
+Stronger privacy degrades
+utility; adaptive attacks
+can bypass
+Robust Aggregation Poisoning; Byzantine faults Does not address confiden-
+tiality; assumes detectable
+or bounded malicious frac-
+tion
+Recovery-Based Residual poisoning after
+detection
+Introduces latency; re-
+quires historical state
+Table 1: Relationship between attack classes and defence families in FL. HE and
+secure aggregation mainly protect gradients in transit; DP reduces membership and
+source leakage; robust aggregation and recovery mechanisms address poisoning. No
+single defence covers all attack classes.
+4.1 Homomorphic Encryption and Secure Aggregation
+HE-based defences address gradient inversion and honest-but-curious server infer-
+ence by preventing the server from observing plaintext gradients during aggrega-
+tion. If the server only receives encrypted updates, it cannot directly apply an
+optimisation-based reconstruction attack such as Geiping et al.’s gradient inversion
+attack [2].
+Lee et al. [11] propose a server-initiated HE scheme for FL that combines CKKS
+encryption, noise masking, and additive secret sharing. The key design choice is
+to shift expensive HE setup operations to the server, reducing the cryptographic
+burden on resource-constrained clients. Their scheme is designed to protect against
+colluding semi-honest participants and reports only 4–8% overhead with no observed
+accuracy loss. This makes it an important practical baseline for HE-based FL.
+FedSHE, proposed by Pan et al. [12], addresses a different practical limitation of
+CKKS-based FL: the maximum vector length that can be encrypted in a single ci-
+phertext. Large neural networks produce gradient vectors that exceed this limit,
+so FedSHE introduces adaptive segmented encryption, splitting large gradients into
+CKKS-compatible chunks before aggregation. Pan et al. also analyse how CKKS pa-
+rameters affect correctness, security, and computational cost, showing that HE-based
+FL requires careful parameter selection rather than default encryption settings.
+These HE-based approaches are effective against attacks that require plaintext gra-
+8
+
+
+--- PAGE 9 ---
+dients, especially gradient inversion by an honest-but-curious server. However, they
+have two major limitations. First, HE protects updates during communication and
+aggregation, but does not prevent inference from the final model’s behaviour. Mem-
+bership inference attacks such as TEAR [6] and FedMIA [8] may still succeed because
+they exploit prediction behaviour or parameter trajectories rather than raw plain-
+text gradients. Second, HE does not prevent poisoning: an encrypted malicious
+update is still malicious after decryption and aggregation. Therefore, HE should be
+treated as a confidentiality layer, not a complete FL security solution.
+4.2 Differential Privacy and Noise-Based Defences
+Differential Privacy (DP) protects against membership inference and gradient-level
+leakage by injecting calibrated noise into model updates before sharing, ensuring
+that the contribution of any individual training record cannot be reliably inferred.
+Wei et al. [13] provide a foundational analysis of FL with DP, deriving convergence
+guarantees under Gaussian noise and showing that the privacy budgetεgoverns the
+accuracy–privacy tradeoff: smallerε(stronger privacy) requires larger noise, which
+degrades model convergence.
+Against the membership inference attacks of Bai et al. [5] and He et al. [7], DP is the
+most principled defence: by construction, a DP mechanism bounds the statistical
+advantage any adversary can gain from observing the protected output. Against
+source inference, client-level DP, where noise is added at the level of the entire client
+update rather than individual records, reduces the gradient signatures that allow a
+server to identify contributing clients.
+The central limitation of DP-based defences is the accuracy–privacy tradeoff. Zhang
+et al. [17] formalise this through the No-Free-Lunch theorem for FL, which shows
+that no mechanism can simultaneously achieve minimal privacy leakage, minimal
+utility loss, and minimal efficiency cost. For DP specifically, stronger privacy guar-
+antees require larger noise budgets, which reduce the signal-to-noise ratio in the
+aggregated gradient and can severely degrade model accuracy when the number of
+local training samples is small or when the data is highly non-IID. This tradeoff is
+examined in detail in the following section.
+DP does not address every attack. A poisoned update that has been differentially
+perturbed is still a poisoned update, so poisoning requires separate integrity de-
+fences. Similarly, DP must be carefully composed with HE or secure aggregation if
+both membership protection and encrypted aggregation are required.
+4.3 Robust Aggregation and Recovery-Based Defences
+Defending against poisoning requires mechanisms that assess the quality or trust-
+worthiness of individual client updates, rather than their confidentiality. Panda et
+al. [14] propose SparseFed, a defence that applies top-ksparsification to the aggre-
+gated gradient: only theklargest entries are retained, under the assumption that
+poisoned updates tend to affect a sparse, targeted set of parameters while benign
+updates spread influence more broadly. By discarding the long tail of parameter
+9
+
+
+--- PAGE 10 ---
+updates, SparseFed limits the impact of adversarial modifications while preserving
+the signal from benign clients.
+A complementary approach is recovery rather than prevention. Cao et al. [15] pro-
+pose FedRecover, which stores historical model checkpoints and client update sum-
+maries and uses them to reconstruct an uncontaminated model after a poisoning
+attack has been detected. Rather than requiring real-time filtering of every update,
+FedRecover spreads the defence cost by recovering post hoc from a trusted historical
+state. Their experiments show that FedRecover can restore model performance to
+near-baseline levels at lower computational cost than retraining from scratch.
+Neither SparseFed nor FedRecover addresses gradient confidentiality. SparseFed op-
+erates on aggregated gradients in the clear and would need to be composed with
+an HE or secure aggregation scheme for deployments where the server is untrusted.
+FedRecover requires the server to store and query historical updates, which raises ad-
+ditional confidentiality concerns unless those records are themselves protected. The
+composition of integrity defences with cryptographic defences is an active research
+problem and a key motivation for the proposed configurable framework.
+4.4 Combining Defence Layers
+A practical FL deployment is unlikely to rely on only one defence. A hospital
+consortium, for example, may need HE to prevent the coordinating server from
+seeing gradients, DP to reduce membership leakage from the trained model, and
+robust aggregation to limit the influence of compromised participants. However,
+combining defences is not additive in a simple way. HE may prevent the server from
+inspecting individual updates, but that same opacity can make anomaly detection
+harder. DP may reduce membership leakage, but the added noise can also make
+benign and malicious updates more difficult to distinguish. Recovery methods such
+as FedRecover require historical state, but storing historical updates may increase
+the amount of sensitive material that must be protected.
+This creates a system-level design problem. The designer must decide not only
+which mechanisms to include, but also where they sit in the FL pipeline and which
+information each mechanism is allowed to observe. A robust aggregation rule that
+requires plaintext updates may be incompatible with a strict HE design unless the
+aggregation is redesigned to work over ciphertexts or trusted execution is introduced.
+Conversely, a fully encrypted aggregation pipeline may achieve confidentiality while
+leaving the system blind to poisoned updates. These tensions support the central
+argument of this review: privacy-preserving FL should expose defence choices and
+their costs explicitly, rather than presenting a fixed protocol as universally appro-
+priate.
+10
+
+
+--- PAGE 11 ---
+5 Privacy–Utility–Efficiency Tradeoffs in Feder-
+ated Learning
+A recurring theme across all privacy-preserving techniques is the presence of fun-
+damental tradeoffs between privacy protection, model utility, and computational
+efficiency. This section examines that tradeoff structure formally, drawing on the
+No-Free-Lunch theorem and multi-objective optimisation frameworks.
+5.1 The No-Free-Lunch Theorem for Federated Learning
+Zhang et al. [17] formalise the privacy–utility–efficiency tradeoff by deriving a No-
+Free-Lunch (NFL) theorem for federated learning. Their framework treats a privacy-
+preserving FL mechanism as a transformation from unprotected model information
+W O
+k to protected model informationW S
+k . The key insight is that protection mech-
+anisms reduce the dependence between shared model information and private data,
+but this protection is achieved by distorting the information used for training or
+communication. This distortion is precisely what creates utility loss and efficiency
+reduction.
+At convergence, Zhang et al. show that these three quantities satisfy the following
+lower bound, where privacy leakage is represented byε p, utility loss is represented
+byε u, and efficiency reduction is represented byε c:
+εp + Cd
+2 εu + Cx
+2 εe ≥C 1.(1)
+In this expression,C d andC x are weighting constants that determine how strongly
+utility loss and efficiency reduction contribute to the overall bound. The constant
+C1 represents the discrepancy between the adversary’s prior belief and the belief
+they could obtain from unprotected model information. In practical terms,C 1 is
+usually positive because shared model updates contain some information about the
+private training data.
+The importance of Equation 1 is that it rules out the possibility of an ideal protec-
+tion mechanism that achieves perfect privacy, perfect model performance, and zero
+overhead at the same time. If a mechanism reduces privacy leakageε p, then either
+utility lossε u or efficiency reductionε e must increase to satisfy the bound. For
+example, differential privacy can reduce privacy leakage by adding noise, but this
+may reduce model accuracy. Homomorphic encryption can preserve model accu-
+racy by encrypting updates without changing their plaintext values, but it increases
+computation and communication cost.
+The importance of Zhang et al.’s theorem for this review is that it changes the
+evaluation question. Instead of asking which defence is universally best, the relevant
+question becomes: which operating point is suitable for a particular deployment? A
+hospital network may accept highε e if stronger privacy is required, while a resource-
+constrained edge deployment may tolerate weaker privacy to reduce communication
+overhead. For the proposed research, this supports the need for configurable HE-
+11
+
+
+--- PAGE 12 ---
+based FL systems: encryption parameters, noise levels, and aggregation choices
+should be exposed as explicit controls rather than hidden implementation details.
+For randomisation mechanisms, stronger privacy is achieved by increasing the noise
+scale, but this also increases utility loss because the aggregated gradients contain
+less useful training signal. The NFL result therefore transforms the discussion from
+“which mechanism is best?” to “which operating point on the tradeoff frontier is
+appropriate for a given deployment?” This reframing has direct implications for
+system design: a fixed configuration implicitly selects one point on the frontier,
+offering no mechanism for users to adjust protection strength when the deployment
+context changes.
+5.2 Multi-Objective Optimisation and Pareto Fronts
+Kang et al. [18] operationalise the NFL tradeoff by framing FL as a constrained
+multi-objective optimisation problem (CMOFL). Their formulation jointly optimises
+privacy leakage, utility loss, and training cost, subject to upper bounds on each
+objective, and searches for Pareto-optimal configurations, where no objective can
+be improved without worsening another. They propose two algorithms, CMOFL-
+NSGA-II (an evolutionary approach) and CMOFL-PSL (a Bayesian optimisation
+approach), and evaluate them across privacy mechanisms including randomisation,
+BatchCrypt (HE-based), and sparsification on Fashion-MNIST and CIFAR-10.
+Their experimental results confirm that the Pareto front is non-trivial: there is
+a rich set of configurations that represent different acceptable balances between
+privacy, utility, and efficiency, and the best configuration depends on domain-specific
+priorities. A hospital network may be willing to accept higher computation cost
+in exchange for stronger privacy guarantees; a mobile application may prioritise
+efficiency and tolerate a weaker privacy budget. The CMOFL framework makes
+this choice explicit rather than embedding it in fixed protocol parameters.
+5.3 Privacy, Fairness, and Cascading Effects
+Chen et al. [19] identify an additional dimension of the tradeoff that is often over-
+looked: the interaction between privacy mechanisms and model fairness. Their
+analysis shows that differential privacy can disproportionately degrade accuracy for
+underrepresented groups, because the noise added to obscure individual contribu-
+tions may also mask the signal from low-frequency patterns in the data. Conversely,
+fairness-aware training objectives that up-weight minority-group examples can in-
+crease privacy risk by amplifying the contribution of individual records. These cas-
+cading effects mean that the privacy–utility frontier in practice is higher-dimensional
+than the three-objective formulation of Zhang et al. [17]: choices that appear Pareto-
+optimal under privacy, accuracy, and efficiency objectives may still impose hidden
+costs on fairness or equity.
+For a configurable privacy framework, this finding motivates exposing fairness as an
+additional consideration when selecting operating points, particularly in cross-silo
+12
+
+
+--- PAGE 13 ---
+deployments where clients may represent demographically heterogeneous popula-
+tions.
+5.4 Implications for System Design
+Together, the NFL theorem, the CMOFL framework, and the fairness analysis mo-
+tivate a clear design principle: privacy mechanisms should be configurable rather
+than fixed, and their configurations should be mapped to measurable guarantees
+and costs so that users can make informed choices. Current HE-based frameworks,
+including the server-initiated scheme of Lee et al. [11] and FedSHE [12], embed spe-
+cific CKKS parameter choices that determine where the system sits on the privacy–
+utility–efficiency frontier. Those choices are currently opaque to the end user. Ex-
+posing them as explicit control surfaces, along with estimates of the corresponding
+privacy leakage, accuracy impact, and overhead, would allow deployments with dif-
+ferent priorities to select the configuration most appropriate for their context.
+6 Conclusion
+This review has examined the state of privacy-preserving federated learning across
+four dimensions: the architectural and cryptographic foundations of FL; the at-
+tack landscape; the defence landscape; and the fundamental tradeoff structure that
+constrains any privacy-preserving design.
+The foundational survey of Li et al. [1] establishes that FL systems span a wide range
+of architectures and threat models, and that the privacy properties of any mechanism
+depend critically on the specific configuration. The HE literature, exemplified by
+Lee et al. [11] and FedSHE [12], demonstrates that cryptographic protection of
+gradients in transit is achievable at practical overhead. The security analysis of Li
+and Micciancio [16] adds the important caveat that the approximate arithmetic of
+CKKS requires careful parameter choices to achieve rigorous guarantees.
+The attack literature reveals that the FL privacy threat is multi-channel and multi-
+class. Gradient inversion attacks [2–4] show that shared gradients can reconstruct
+training inputs under realistic conditions. Membership inference attacks [5–8] demon-
+strate that model behaviour reveals training set membership even when gradients are
+protected. Poisoning attacks [9, 10] show that model integrity can be compromised
+independently of gradient confidentiality.
+The defence literature responds with mechanisms that are effective within their
+respective scope but incomplete across the full attack surface. HE and secure ag-
+gregation protect gradients in transit against honest-but-curious and colluding ad-
+versaries [11, 12], but do not prevent inference from model behaviour. Differential
+privacy reduces membership leakage but at the cost of utility [13]. Robust ag-
+gregation and recovery mechanisms address poisoning [14, 15], but do not address
+confidentiality. No single mechanism covers all three attack classes simultaneously.
+The tradeoff literature formalises why this is not a matter of insufficient engineer-
+ing effort but a structural property of the problem. The NFL theorem of Zhang et
+13
+
+
+--- PAGE 14 ---
+al. [17] establishes that privacy, utility, and efficiency cannot all be simultaneously
+minimised. The multi-objective framework of Kang et al. [18] shows that the appro-
+priate response is not to search for a universally best mechanism, but to make the
+tradeoff frontier explicit and allow users to select operating points that match their
+deployment priorities. Chen et al. [19] extend this picture by showing that fairness
+is an additional dimension of the tradeoff that fixed configurations can obscure.
+The research gap identified by this review is therefore fourfold. Current defences are
+attack-specific, leaving FL systems vulnerable to the classes of attack they were not
+designed to address. Existing HE-based frameworks embed their privacy–utility–
+efficiency tradeoffs in fixed protocol parameters rather than exposing them as user-
+configurable choices. Most mechanisms are evaluated under narrow threat models
+that do not reflect the full multi-class attack landscape. And the theory of multi-
+objective optimisation, which provides the tools needed to navigate the tradeoff
+frontier explicitly, has not yet been tightly coupled to practical system implementa-
+tions. Addressing these gaps by extending a practical HE-based baseline to broader
+attack coverage and exposing its tradeoff structure as an explicit configuration sur-
+face forms the central objective of the proposed research.
+14
+
+
+--- PAGE 15 ---
+References
+[1] Q. Li, Z. Wen, Z. Wu, S. Hu, N. Wang, Y. Li, X. Liu, and B. He, “A survey
+on federated learning systems: Vision, hype and reality for data privacy and
+protection,”IEEE Transactions on Knowledge and Data Engineering, vol. 35,
+no. 4, pp. 3347–3366, 2021.
+[2] J. Geiping, H. Bauermeister, H. Dr¨ oge, and M. Moeller, “Inverting gradients—
+how easy is it to break privacy in federated learning?”Advances in Neural
+Information Processing Systems, vol. 33, pp. 16 937–16 947, 2020.
+[3] J. Geng, Y. Mou, Q. Li, F. Li, O. Beyan, S. Decker, and C. Rong, “Improved
+gradient inversion attacks and defenses in federated learning,”IEEE Transac-
+tions on Big Data, vol. 10, no. 6, pp. 839–850, 2023.
+[4] P. Guo, R. Wang, S. Zeng, J. Zhu, H. Jiang, Y. Wang, Y. Zhou, F. Wang,
+H. Xiong, and L. Qu, “Exploring the vulnerabilities of federated learning: A
+deep dive into gradient inversion attacks,”IEEE Transactions on Pattern Anal-
+ysis and Machine Intelligence, 2025.
+[5] L. Bai, H. Hu, Q. Ye, H. Li, L. Wang, and J. Xu, “Membership inference at-
+tacks and defenses in federated learning: A survey,”ACM Computing Surveys,
+vol. 57, no. 4, pp. 1–35, 2024.
+[6] G. Liu, Z. Tian, J. Chen, C. Wang, and J. Liu, “TEAR: Exploring temporal
+evolution of adversarial robustness for membership inference attacks against
+federated learning,”IEEE Transactions on Information Forensics and Security,
+vol. 18, pp. 4996–5010, 2023.
+[7] X. He, Y. Xu, S. Zhang, W. Xu, and J. Yan, “Enhance membership inference
+attacks in federated learning,”Computers & Security, vol. 136, p. 103535, 2024.
+[8] G. Zhu, D. Li, H. Gu, Y. Yao, L. Fan, and Y. Han, “Fedmia: An effective mem-
+bership inference attack exploiting” all for one” principle in federated learning,”
+inProceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 2025, pp. 20 643–20 653.
+[9] V. Tolpegin, S. Truex, M. E. Gursoy, and L. Liu, “Data poisoning attacks
+against federated learning systems,” inEuropean symposium on research in
+computer security. Springer, 2020, pp. 480–501.
+[10] H. Kasyap and S. Tripathy, “Beyond data poisoning in federated learning,”
+Expert Systems with Applications, vol. 235, p. 121192, 2024.
+[11] C. Lee, M. L. Daggitt, Y. Gao, and J. B. Hong, “Advanced privacy protection in
+federated learning using server-initiated homomorphic encryption,” inProceed-
+ings of the 34th ACM International Conference on Information and Knowledge
+Management, 2025, pp. 1438–1448.
+15
+
+
+--- PAGE 16 ---
+[12] Y. Pan, Z. Chao, W. He, Y. Jing, L. Hongjia, and W. Liming, “Fedshe: pri-
+vacy preserving and efficient federated learning with adaptive segmented ckks
+homomorphic encryption,”Cybersecurity, vol. 7, no. 1, p. 40, 2024.
+[13] K. Wei, J. Li, M. Ding, C. Ma, H. H. Yang, F. Farokhi, S. Jin, T. Q. Quek, and
+H. V. Poor, “Federated learning with differential privacy: Algorithms and per-
+formance analysis,”IEEE Transactions on Information Forensics and Security,
+vol. 15, pp. 3454–3469, 2020.
+[14] A. Panda, S. Mahloujifar, A. N. Bhagoji, S. Chakraborty, and P. Mittal,
+“SparseFed: Mitigating model poisoning attacks in federated learning with
+sparsification,” inInternational Conference on Artificial Intelligence and Statis-
+tics. PMLR, 2022, pp. 7587–7624.
+[15] X. Cao, J. Jia, Z. Zhang, and N. Z. Gong, “FedRecover: Recovering from
+poisoning attacks in federated learning using historical information,” in2023
+IEEE Symposium on Security and Privacy (SP). IEEE, 2023, pp. 1366–1383.
+[16] B. Li and D. Micciancio, “On the security of homomorphic encryption on ap-
+proximate numbers,” inAnnual International Conference on the Theory and
+Applications of Cryptographic Techniques. Springer, 2021, pp. 648–677.
+[17] X. Zhang, Y. Kang, K. Chen, L. Fan, and Q. Yang, “Trading off privacy, utility,
+and efficiency in federated learning,”ACM Transactions on Intelligent Systems
+and Technology, vol. 14, no. 6, pp. 1–32, 2023.
+[18] Y. Kang, H. Gu, X. Tang, Y. He, Y. Zhang, J. He, Y. Han, L. Fan, K. Chen,
+and Q. Yang, “Optimizing privacy, utility, and efficiency in a constrained multi-
+objective federated learning framework,”ACM Transactions on Intelligent Sys-
+tems and Technology, vol. 15, no. 6, pp. 1–33, 2024.
+[19] H. Chen, T. Zhu, T. Zhang, W. Zhou, and P. S. Yu, “Privacy and fairness in
+federated learning: On the perspective of tradeoff,”ACM Computing Surveys,
+vol. 56, no. 2, pp. 1–37, 2023.
+16

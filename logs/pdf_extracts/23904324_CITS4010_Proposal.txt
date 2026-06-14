@@ -1,0 +1,157 @@
+
+
+--- PAGE 1 ---
+CITS4010 Research Proposal
+Title:Extending a Privacy-Preserving Federated Learning Scheme for Con-
+figurable Security
+Author:Adam Ahmadavi (23904324)
+Supervisor:Dr. Jin Hong
+Degree:Bachelor of Advanced Computer Science (Honours)
+Statement of AI Use:LLMs were used to format the proposal into LaTeX.
+Background
+Machine learning algorithms require huge amounts of data to train their models, but
+data is dispersed across several organisations and individuals under the protection
+of privacy regulations such as the General Data Protection Regulation (GDPR) [1].
+These isolated datasets are individually too small or unrepresentative to train high-
+quality models, but cannot simply be pooled due to legal and policy constraints.
+Such phenomena are widespread across healthcare, finance, government, and supply
+chains: a single hospital, for instance, may lack sufficient patient data to train a
+reliable diagnostic model, yet sharing records with other hospitals is prohibited.
+Federated Learning (FL) is a solution which allows the nodes in a distributed net-
+work to train a shared global model by having each node train on its own local data
+and transmit model gradients to a central server for aggregation, without sharing
+the raw data. However, transmitting gradients introduces its own privacy risks. FL
+has attracted significant research effort across a wide range of model types, includ-
+ing deep neural networks, gradient boosted decision trees, and logistic regression,
+and a corresponding range of privacy-preserving techniques (PPTs) have been pro-
+posed to secure these systems, such as homomorphic encryption (HE), differential
+privacy (DP) and secure multi-party computation (SMC) [2]. Lee et al. [2] proposed
+a scheme that combined server-initiated HE, noise masking, series-based SMC, and
+additive secret sharing, keeping client overhead to only 4–8% above a scheme without
+any PPTs in place.
+The scheme’s security guarantee is formalised as:
+1
+
+
+--- PAGE 2 ---
+Claim 1.The protocol does not leak local model gradientsg i for any honest client
+iin routek, even in the presence of a semi-honest central server colluding with
+semi-honest clients, as long as routekhas at most|r k| −2semi-honest clients.
+This guarantee is narrow, as it only covers semi-honest gradient inference under
+a fixed threat model and a single fixed configuration. It does not address poten-
+tial attacks such as gradient inversion [3], membership inference [4], and poisoning
+attacks [5]. Zhang et al. [6] have proposed their No-Free-Lunch (NFL) theorem,
+which states that privacy leakage, utility loss, and efficiency reduction cannot all
+be minimised simultaneously, as attempting to reduce one the effects in one area
+leads to increases in one or both of the other fields. A fixed configuration therefore
+implicitly imposes a fixed tradeoff, with no mechanism for users to adjust it. Zhang
+et al. also derived concrete lower bounds for four widely-used protection mecha-
+nisms, randomisation, HE, secret sharing, and compression, providing a basis for
+comparing and parameterising these techniques. For example, in Paillier HE, it is
+found the utility loss is zero, but the privacy and efficiency trade off against the
+cipher text sizen. Having a largernimproves privacy at the cost of communication
+overhead.
+This matters beyond just the three-way tradeoff: Chen et al. [7] show that pri-
+vacy mechanisms can have cascading effects across other model properties, finding
+that differential privacy disproportionately degrades accuracy for underrepresented
+groups, and that fairness-aware training can in turn increase privacy risk. Together,
+these results reinforce the case for a configurable framework that makes such trade-
+offs explicit rather than burying them in a fixed design.
+Aim
+This thesis will expand on the scheme proposed by Lee et al. [2] and has two goals:
+broadening security coverage to include gradient inversion, model inference attacks
+and poisoning attacks, and developing a configurable privacy framework that lets
+users tune the tradeoff between security, utility and overhead cost. The NFL bounds
+of Zhang et al. [6] provide the theoretical foundation for mapping parameter choices
+to security guarantees.
+Research Questions
+RQ1.How can Lee et al.’s scheme [2] be extended to cover gradient inversion, model
+inference and poisoning attacks, and what are the resulting utility and efficiency
+costs in light of the NFL tradeoffs [6]?
+RQ2.Can the extended scheme be parameterised so that users can explicitly config-
+ure the tradeoff between security coverage, adversary tolerance, and computational
+overhead at a specified privacy level?
+If both goals are achieved, this new framework would have broader applicability.
+Real-world FL deployments rarely have uniform privacy needs. A hospital network,
+2
+
+
+--- PAGE 3 ---
+for instance, may need stronger protections for sensitive patient records than for
+anonymised research data, while a financial institution operating across different
+countries may face different legal requirements in each jurisdiction. Rather than
+building an entirely new system for each situation, the configurable framework de-
+veloped in this project would allow users to simply dial up or down the level of
+privacy protection to suit their specific context.
+Method
+Step 1: Threat analysis.HE, noise masking, secret sharing and chained routing
+will be analysed against the threat models of gradient inversion [3], model infer-
+ence [4] and poisoning [5]. For each threat, the analysis will ask whether the existing
+scheme provides incidental protection, what minimal extension is needed if it does
+not, and what the overhead cost of that extension is.
+Step 2: Configurable parameters.The threat analysis will identify the param-
+eters governing security level, expected to include: route length (n−2 adversary
+tolerance), noise magnitude (gradient inversion resistance) and HE settings (encryp-
+tion strength vs. speed). Each parameter will be formalised so that a target privacy
+level maps to a concrete configuration.
+Step 3: Implementation and evaluation.Lee et al.’s scheme [2] will be re-
+produced using Python/PyTorch/TenSEAL as a baseline, then extended per Steps
+1–2. Experiments across the MNIST, CIFAR-10, and SVHN datasets will measure
+model accuracy, runtime overhead, and threat coverage as a function of privacy
+configuration.
+Timeline
+Period Activity
+Weeks 1–3 Finalise proposal; confirm direction with supervisor
+Weeks 4–12 Begin literature review on common attacks against FL
+such as gradient inversion, poisoning, MIA, HE param-
+eter analysis and tradeoffs between privacy and utility
+Weeks 7–12 Analyse threat coverage of Lee et al. [2]; identify con-
+figurable parameters; begin formalising privacy-level
+framework using NFL bounds [6]
+Weeks 11–12 Begin implementation to reproduce Lee et al. baseline;
+prototype initial extensions. Submit revised proposal if
+necessary
+Winter break Continued implementation; baseline validation against
+original results
+Weeks 13–22 Full experiments and attempt to implement adjustable
+parameters for privacy-level configurations, overhead
+analysis, extended threat coverage
+Weeks 18–24 Writing, revising and submitting dissertation
+3
+
+
+--- PAGE 4 ---
+Software and Hardware Requirements
+•Languages/Libraries:Python 3.9, PyTorch, TenSEAL (CKKS HE), NumPy
+•Datasets:MNIST, CIFAR-10, SVHN
+•Hardware:Personal laptop
+•Version control:GitHub
+4
+
+
+--- PAGE 5 ---
+References
+[1] Qinbin Li, Zeyi Wen, Zhaomin Wu, Sixu Hu, Naibo Wang, Yuan Li, Xu Liu,
+and Bingsheng He. A survey on federated learning systems: Vision, hype and
+reality for data privacy and protection.IEEE Transactions on Knowledge and
+Data Engineering, 35(4):3347–3366, 2021.
+[2] Cameron Lee, Matthew L Daggitt, Yansong Gao, and Jin B Hong. Advanced
+privacy protection in federated learning using server-initiated homomorphic en-
+cryption. InProceedings of the 34th ACM International Conference on Informa-
+tion and Knowledge Management, pages 1438–1448, 2025.
+[3] Yangsibo Huang, Samyak Gupta, Zhao Song, Kai Li, and Sanjeev Arora. Eval-
+uating gradient inversion attacks and defenses in federated learning.Advances
+in neural information processing systems, 34:7232–7241, 2021.
+[4] Gaoyang Liu, Zehao Tian, Jian Chen, Chen Wang, and Jiangchuan Liu. Tear:
+Exploring temporal evolution of adversarial robustness for membership inference
+attacks against federated learning.IEEE Transactions on Information Forensics
+and Security, 18:4996–5010, 2023.
+[5] Harsh Kasyap and Somanath Tripathy. Beyond data poisoning in federated
+learning.Expert Systems with Applications, 235:121192, 2024.
+[6] Xiaojin Zhang, Yan Kang, Kai Chen, Lixin Fan, and Qiang Yang. Trading
+off privacy, utility, and efficiency in federated learning.ACM Transactions on
+Intelligent Systems and Technology, 14(6):1–32, 2023.
+[7] Huiqiang Chen, Tianqing Zhu, Tao Zhang, Wanlei Zhou, and Philip S Yu. Pri-
+vacy and fairness in federated learning: On the perspective of tradeoff.ACM
+Computing Surveys, 56(2):1–37, 2023.
+5
