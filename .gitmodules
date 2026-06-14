@@ -1,0 +1,21 @@
+[submodule "repos/server-initiated_HE_FL"]
+	path = repos/server-initiated_HE_FL
+	url = https://github.com/jbhong/server-initiated_HE_FL.git
+[submodule "repos/FedSHE"]
+	path = repos/FedSHE
+	url = https://github.com/yoopaan/FedSHE.git
+[submodule "repos/FedAvg"]
+	path = repos/FedAvg
+	url = https://github.com/naderAsadi/FedAvg.git
+[submodule "repos/GIA"]
+	path = repos/GIA
+	url = https://github.com/1wrx1/GIA.git
+[submodule "repos/DataPoisoning_FL"]
+	path = repos/DataPoisoning_FL
+	url = https://github.com/git-disl/DataPoisoning_FL.git
+[submodule "repos/FedMIA"]
+	path = repos/FedMIA
+	url = https://github.com/Liar-Mask/FedMIA.git
+[submodule "repos/Awesome-Gradient-Inversion-Attacks"]
+	path = repos/Awesome-Gradient-Inversion-Attacks
+	url = https://github.com/Pengxin-Guo/Awesome-Gradient-Inversion-Attacks.git
