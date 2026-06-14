@@ -16,6 +16,4 @@
 [submodule "repos/FedMIA"]
 	path = repos/FedMIA
 	url = https://github.com/aradavi63/FedMIA.git
-[submodule "repos/Awesome-Gradient-Inversion-Attacks"]
-	path = repos/Awesome-Gradient-Inversion-Attacks
-	url = https://github.com/Pengxin-Guo/Awesome-Gradient-Inversion-Attacks.git
+
